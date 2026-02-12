@@ -1,9 +1,12 @@
 import axios from 'axios';
 import crypto from 'crypto';
+import debug from 'debug';
+import config from '../config/index.js';
 
+const log = debug('app:snoonu');
 const SNOONU_API_ENDPOINT = 'https://admin.snoonu.com/api/v5/search/global';
 
-export async function searchSnoonu(query, lat = 25.2855, lon = 51.5314) {
+export async function searchSnoonu(query, lat = config.defaults.lat, lon = config.defaults.lon) {
   try {
     const headers = {
       'appversion': '3.0.0',
@@ -16,8 +19,8 @@ export async function searchSnoonu(query, lat = 25.2855, lon = 51.5314) {
 
     const params = {
       page: '0',
-      page_size: '150',
-      product_size: '110',
+      page_size: String(config.search.snoonuPageSize),
+      product_size: String(config.search.snoonuProductSize),
       category_id: 62,
       term: query,
     };
@@ -25,7 +28,7 @@ export async function searchSnoonu(query, lat = 25.2855, lon = 51.5314) {
     const response = await axios.get(SNOONU_API_ENDPOINT, {
       headers,
       params,
-      timeout: 10000,
+      timeout: config.search.snoonuTimeout,
     });
 
     const products = [];
@@ -74,7 +77,7 @@ export async function searchSnoonu(query, lat = 25.2855, lon = 51.5314) {
     }
     return products;
   } catch (error) {
-    console.error(`Snoonu processing failed: ${error.message}`);
+    log('error: %s', error.message);
     return [];
   }
 }

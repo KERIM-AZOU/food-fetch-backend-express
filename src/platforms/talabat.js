@@ -1,9 +1,12 @@
 import axios from 'axios';
+import debug from 'debug';
+import config from '../config/index.js';
 
+const log = debug('app:talabat');
 const TALABAT_API_ENDPOINT = 'https://www.talabat.com/nextSearchApi/v3/vendor';
 
-export async function searchTalabat(query, lat = 25.2855, lon = 51.5314) {
-  console.log(`[Talabat] Searching for: "${query}" at (${lat}, ${lon})`);
+export async function searchTalabat(query, lat = config.defaults.lat, lon = config.defaults.lon) {
+  log('searching: "%s" at (%d, %d)', query, lat, lon);
 
   try {
     const headers = {
@@ -23,7 +26,7 @@ export async function searchTalabat(query, lat = 25.2855, lon = 51.5314) {
       longitude: lon,
       query: query,
       vertical_ids: [0, 1, 2, 3, 4, 5, 6],
-      limit: 150,
+      limit: config.search.talabatLimit,
       country_id: 6,
       page_number: 0,
       sort: { by: 'RELEVANCE', order: 'ASC' },
@@ -31,15 +34,13 @@ export async function searchTalabat(query, lat = 25.2855, lon = 51.5314) {
 
     const response = await axios.post(TALABAT_API_ENDPOINT, payload, {
       headers,
-      timeout: 15000,
+      timeout: config.search.platformTimeout,
     });
-
-    console.log(`[Talabat] Response status: ${response.status}`);
 
     const products = [];
     const vendors = response.data?.result?.vendors || response.data?.vendors || [];
 
-    console.log(`[Talabat] Found ${vendors.length} vendors`);
+    log('found %d vendors', vendors.length);
 
     for (const vendor of vendors) {
       const vendorName = vendor.vendor_name || vendor.name || '';
@@ -85,13 +86,10 @@ export async function searchTalabat(query, lat = 25.2855, lon = 51.5314) {
       }
     }
 
-    console.log(`[Talabat] Returning ${products.length} products`);
+    log('returning %d products', products.length);
     return products;
   } catch (error) {
-    console.error('[Talabat] Error:', error.message);
-    if (error.response) {
-      console.error('[Talabat] Response status:', error.response.status);
-    }
+    log('error: %s', error.message);
     return [];
   }
 }

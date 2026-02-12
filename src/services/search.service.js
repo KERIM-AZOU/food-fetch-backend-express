@@ -7,6 +7,7 @@ import {
   paginateResults,
   getAllRestaurants,
 } from '../utils/comparison.js';
+import config from '../config/index.js';
 
 const PLATFORM_MAP = {
   snoonu: searchSnoonu,
@@ -29,7 +30,6 @@ export async function searchProducts({
   time_min,
   time_max,
   restaurant_filter = '',
-  group_by_restaurant = false,
 }) {
   const promises = platforms
     .filter((p) => PLATFORM_MAP[p])
@@ -50,10 +50,9 @@ export async function searchProducts({
   });
 
   const groupedProducts = groupProductsBySimilarity(allProducts, sort);
-  const { products, pagination } = paginateResults(groupedProducts, page, 12);
+  const { products, pagination } = paginateResults(groupedProducts, page, config.search.perPage);
 
   return {
-    grouped: group_by_restaurant,
     products,
     pagination,
     all_restaurants: allRestaurants,

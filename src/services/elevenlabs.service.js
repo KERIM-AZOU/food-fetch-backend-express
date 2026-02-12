@@ -1,6 +1,8 @@
 import axios from 'axios';
+import debug from 'debug';
 import config from '../config/index.js';
 
+const log = debug('app:elevenlabs');
 const { apiKey, defaultVoiceId, chatVoiceId } = config.elevenlabs;
 
 /**
@@ -9,7 +11,7 @@ const { apiKey, defaultVoiceId, chatVoiceId } = config.elevenlabs;
  * @param {{ voiceId?: string, forChat?: boolean }} options
  */
 export async function textToSpeech(text, { voiceId, forChat = false } = {}) {
-  if (!apiKey) return null;
+  if (!apiKey) throw new Error('ELEVENLABS_API_KEY not configured');
 
   const voice = voiceId || (forChat ? chatVoiceId : defaultVoiceId);
   const voiceSettings = forChat
@@ -27,10 +29,10 @@ export async function textToSpeech(text, { voiceId, forChat = false } = {}) {
         'xi-api-key': apiKey,
       },
       responseType: 'arraybuffer',
-      timeout: 15000,
+      timeout: config.search.platformTimeout,
     },
   );
-  console.log(`[TIMING] ElevenLabs TTS — ${Date.now() - start}ms`);
+  log('TTS — %dms', Date.now() - start);
 
   return {
     audio: Buffer.from(response.data).toString('base64'),
@@ -42,7 +44,7 @@ export async function textToSpeech(text, { voiceId, forChat = false } = {}) {
  * List available ElevenLabs voices.
  */
 export async function listVoices() {
-  if (!apiKey) throw new Error('ElevenLabs API key not configured');
+  if (!apiKey) throw new Error('ELEVENLABS_API_KEY not configured');
 
   const response = await axios.get('https://api.elevenlabs.io/v1/voices', {
     headers: { 'xi-api-key': apiKey },

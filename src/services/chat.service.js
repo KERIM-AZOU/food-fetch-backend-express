@@ -1,21 +1,36 @@
-import { isGeminiEnabled } from './gemini.service.js';
-import * as geminiService from './gemini.service.js';
+import debug from 'debug';
 import * as groqService from './groq.service.js';
 import * as elevenlabsService from './elevenlabs.service.js';
+import config from '../config/index.js';
+
+const log = debug('app:chat');
 
 // ── In-memory session store ──────────────────────────────────────────
 
 const conversations = new Map();
+let cleanupTimer = null;
 
-// Cleanup stale sessions every 5 minutes
-setInterval(() => {
-  const oneHourAgo = Date.now() - 60 * 60 * 1000;
-  for (const [sessionId, data] of conversations) {
-    if (data.lastActivity < oneHourAgo) {
-      conversations.delete(sessionId);
+function startCleanup() {
+  if (cleanupTimer) return;
+  cleanupTimer = setInterval(() => {
+    const cutoff = Date.now() - config.chat.sessionTTL;
+    for (const [sessionId, data] of conversations) {
+      if (data.lastActivity < cutoff) {
+        conversations.delete(sessionId);
+      }
     }
+  }, config.chat.cleanupInterval);
+  cleanupTimer.unref();
+}
+
+startCleanup();
+
+export function stopCleanup() {
+  if (cleanupTimer) {
+    clearInterval(cleanupTimer);
+    cleanupTimer = null;
   }
-}, 5 * 60 * 1000);
+}
 
 function getOrCreateConversation(sessionId, extra = {}) {
   let conv = conversations.get(sessionId);
@@ -26,28 +41,22 @@ function getOrCreateConversation(sessionId, extra = {}) {
   return conv;
 }
 
-function trimHistory(conversation, max = 20) {
-  if (conversation.history.length > max) {
-    conversation.history = conversation.history.slice(-max);
+function trimHistory(conversation) {
+  if (conversation.history.length > config.chat.maxHistory) {
+    conversation.history = conversation.history.slice(-config.chat.maxHistory);
   }
 }
 
-// ── TTS helper (uses ElevenLabs for chat, Gemini for standalone) ─────
+// ── TTS helper ──────────────────────────────────────────────────────
 
 async function chatTTS(text) {
   try {
     const result = await elevenlabsService.textToSpeech(text, { forChat: true });
-    if (result) return { data: result.audio, contentType: result.contentType };
+    return { data: result.audio, contentType: result.contentType };
   } catch (err) {
-    console.error('ElevenLabs TTS error:', err.message);
+    log('ElevenLabs TTS error: %s', err.message);
   }
   return null;
-}
-
-// ── Transcription helper ─────────────────────────────────────────────
-
-async function chatTranscribe(audioBase64, mimeType) {
-  return groqService.transcribeAudio(audioBase64, mimeType);
 }
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -57,7 +66,7 @@ export async function handleTextChat({ message, sessionId = 'default', generateA
 
   let stepStart = Date.now();
   const result = await groqService.chat(message, conversation.history, language);
-  console.log(`[TIMING] /chat text chat — ${Date.now() - stepStart}ms`);
+  log('text chat — %dms', Date.now() - stepStart);
 
   conversation.history.push({ role: 'user', content: message });
   conversation.history.push({ role: 'assistant', content: result.response });
@@ -73,7 +82,7 @@ export async function handleTextChat({ message, sessionId = 'default', generateA
   if (generateAudio && result.response) {
     stepStart = Date.now();
     audio = await chatTTS(result.response);
-    console.log(`[TIMING] /chat text TTS — ${Date.now() - stepStart}ms`);
+    log('text TTS — %dms', Date.now() - stepStart);
   }
 
   return {
@@ -90,7 +99,7 @@ export async function handleTextChat({ message, sessionId = 'default', generateA
 export async function handleStartChat({ sessionId, generateAudio = true, language = 'en' }) {
   const routeStart = Date.now();
   const result = groqService.generateGreeting(language);
-  console.log(`[TIMING] /chat/start greeting — ${Date.now() - routeStart}ms`);
+  log('greeting — %dms', Date.now() - routeStart);
 
   const conversation = getOrCreateConversation(sessionId);
   conversation.history = [{ role: 'assistant', content: result.greeting }];
@@ -100,10 +109,10 @@ export async function handleStartChat({ sessionId, generateAudio = true, languag
   if (generateAudio && result.greeting) {
     const ttsStart = Date.now();
     audio = await chatTTS(result.greeting);
-    console.log(`[TIMING] /chat/start TTS — ${Date.now() - ttsStart}ms`);
+    log('start TTS — %dms', Date.now() - ttsStart);
   }
 
-  console.log(`[TIMING] /chat/start TOTAL — ${Date.now() - routeStart}ms`);
+  log('start TOTAL — %dms', Date.now() - routeStart);
   return { greeting: result.greeting, sessionId, audio };
 }
 
@@ -111,11 +120,11 @@ export async function handleAudioChat({ audio: audioBase64, mimeType = 'audio/we
   const routeStart = Date.now();
 
   let stepStart = Date.now();
-  const transcriptionResult = await chatTranscribe(audioBase64, mimeType);
+  const transcriptionResult = await groqService.transcribeAudio(audioBase64, mimeType);
   const transcript = transcriptionResult?.text || '';
   const detectedLanguage = transcriptionResult?.language || 'en';
-  console.log(`[TIMING] /chat/audio transcribe — ${Date.now() - stepStart}ms`);
-  console.log('Transcribed:', transcript, 'Language:', detectedLanguage);
+  log('audio transcribe — %dms', Date.now() - stepStart);
+  log('transcribed: %s lang: %s', transcript, detectedLanguage);
 
   if (!transcript.trim()) {
     return {
@@ -134,7 +143,7 @@ export async function handleAudioChat({ audio: audioBase64, mimeType = 'audio/we
 
   stepStart = Date.now();
   const result = await groqService.chat(transcript, conversation.history, detectedLanguage);
-  console.log(`[TIMING] /chat/audio chat — ${Date.now() - stepStart}ms`);
+  log('audio chat — %dms', Date.now() - stepStart);
 
   conversation.history.push({ role: 'user', content: transcript });
   conversation.history.push({ role: 'assistant', content: result.response });
@@ -151,11 +160,11 @@ export async function handleAudioChat({ audio: audioBase64, mimeType = 'audio/we
   try {
     audioResponse = await chatTTS(result.response);
   } catch (err) {
-    console.error('TTS error:', err.message);
+    log('TTS error: %s', err.message);
   }
-  console.log(`[TIMING] /chat/audio TTS — ${Date.now() - stepStart}ms`);
+  log('audio TTS — %dms', Date.now() - stepStart);
 
-  console.log(`[TIMING] /chat/audio TOTAL — ${Date.now() - routeStart}ms`);
+  log('audio TOTAL — %dms', Date.now() - routeStart);
   return {
     response: result.response,
     transcript,

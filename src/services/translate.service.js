@@ -1,5 +1,4 @@
-import { isGeminiEnabled, translateText as geminiTranslate } from './gemini.service.js';
-import { translateText as groqTranslate } from './groq.service.js';
+import { translateText } from './groq.service.js';
 
 export const LANGUAGE_NAMES = {
   en: 'English', ar: 'Arabic', fr: 'French', es: 'Spanish', de: 'German',
@@ -42,22 +41,12 @@ export const PHRASES = {
 };
 
 /**
- * Translate text using the best available provider.
+ * Translate text using Groq.
  */
 export async function translate(text, targetLang) {
   if (targetLang === 'en') return text;
-
   const langName = LANGUAGE_NAMES[targetLang] || targetLang;
-
-  if (isGeminiEnabled()) {
-    try {
-      return await geminiTranslate(text, langName);
-    } catch (err) {
-      console.error('Gemini translation error, falling back to Groq:', err.message);
-    }
-  }
-
-  return groqTranslate(text, langName);
+  return translateText(text, langName);
 }
 
 /**

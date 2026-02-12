@@ -1,9 +1,12 @@
 import axios from 'axios';
+import debug from 'debug';
+import config from '../config/index.js';
 
+const log = debug('app:rafeeq');
 const RAFEEQ_API_ENDPOINT = 'https://www.gorafeeq.com/api/general';
 
-export async function searchRafeeq(query, lat = 25.2855, lon = 51.5314) {
-  console.log(`[Rafeeq] Searching for: "${query}" at (${lat}, ${lon})`);
+export async function searchRafeeq(query, lat = config.defaults.lat, lon = config.defaults.lon) {
+  log('searching: "%s" at (%d, %d)', query, lat, lon);
 
   try {
     const headers = {
@@ -33,15 +36,13 @@ export async function searchRafeeq(query, lat = 25.2855, lon = 51.5314) {
 
     const response = await axios.post(RAFEEQ_API_ENDPOINT, payload, {
       headers,
-      timeout: 15000,
+      timeout: config.search.platformTimeout,
     });
-
-    console.log(`[Rafeeq] Response status: ${response.status}`);
 
     const products = [];
     const items = response.data?.items || response.data?.data?.items || [];
 
-    console.log(`[Rafeeq] Found ${items.length} items`);
+    log('found %d items', items.length);
 
     for (const item of items) {
       const restaurantName = item.name_english || item.name || '';
@@ -76,13 +77,10 @@ export async function searchRafeeq(query, lat = 25.2855, lon = 51.5314) {
       }
     }
 
-    console.log(`[Rafeeq] Returning ${products.length} products`);
+    log('returning %d products', products.length);
     return products;
   } catch (error) {
-    console.error('[Rafeeq] Error:', error.message);
-    if (error.response) {
-      console.error('[Rafeeq] Response status:', error.response.status);
-    }
+    log('error: %s', error.message);
     return [];
   }
 }

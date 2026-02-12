@@ -15,7 +15,6 @@ export async function search(req, res) {
     time_min,
     time_max,
     restaurant_filter = '',
-    group_by_restaurant = false,
   } = req.body;
 
   if (!term) throw new AppError('Search term is required', 400);
@@ -23,7 +22,7 @@ export async function search(req, res) {
   const result = await searchProducts({
     term, lat, lon, sort, page, platforms,
     price_min, price_max, time_min, time_max,
-    restaurant_filter, group_by_restaurant,
+    restaurant_filter,
   });
 
   res.json(result);

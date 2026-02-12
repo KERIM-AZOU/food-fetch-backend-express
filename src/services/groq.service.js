@@ -1,7 +1,9 @@
 import axios from 'axios';
 import FormData from 'form-data';
+import debug from 'debug';
 import config from '../config/index.js';
 
+const log = debug('app:groq');
 const { apiKey, baseUrl, chatModel, extractionModel } = config.groq;
 
 // ── Whisper transcription ────────────────────────────────────────────
@@ -27,7 +29,7 @@ export async function transcribeAudio(audioBase64, mimeType = 'audio/webm') {
       maxBodyLength: Infinity,
     },
   );
-  console.log(`[TIMING] Groq Whisper — ${Date.now() - start}ms`);
+  log('Whisper — %dms', Date.now() - start);
 
   return {
     text: response.data.text || '',
@@ -62,7 +64,7 @@ Examples: "frites"->fries | "أريد بيتزا"->pizza | "poulet avec riz"->ch
   );
 
   const extracted = response.data.choices[0]?.message?.content?.trim() || '';
-  console.log('Groq AI extracted:', extracted, 'from:', text);
+  log('extracted: %s from: %s', extracted, text);
   return extracted;
 }
 
@@ -165,14 +167,12 @@ export async function chat(userMessage, conversationHistory = [], language = 'en
   messages.push({ role: 'user', content: userMessage });
 
   const start = Date.now();
-  console.log('[TIMING] Groq chat — request started');
-
   const result = await axios.post(
     `${baseUrl}/chat/completions`,
     { model: chatModel, messages, temperature: 0.7, max_tokens: 150 },
     { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } },
   );
-  console.log(`[TIMING] Groq chat — ${Date.now() - start}ms`);
+  log('chat — %dms', Date.now() - start);
 
   const responseText = result.data.choices?.[0]?.message?.content || '';
   return parseGroqChatResponse(responseText);

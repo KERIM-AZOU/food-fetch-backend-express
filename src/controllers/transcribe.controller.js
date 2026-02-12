@@ -1,6 +1,8 @@
-import { isGeminiEnabled, transcribeAudio as geminiTranscribe } from '../services/gemini.service.js';
-import { transcribeAudio as groqTranscribe } from '../services/groq.service.js';
+import debug from 'debug';
+import { transcribeAudio } from '../services/groq.service.js';
 import { AppError } from '../middleware/errorHandler.js';
+
+const log = debug('app:transcribe');
 
 const HALLUCINATION_PATTERNS = [
   /^i'?m ready to translate\.?$/i,
@@ -28,30 +30,13 @@ export async function transcribe(req, res) {
   const { audio, mimeType = 'audio/webm' } = req.body;
   if (!audio) throw new AppError('Audio data is required', 400);
 
-  const audioBuffer = Buffer.from(audio, 'base64');
-
-  // Gemini path
-  if (isGeminiEnabled()) {
-    console.log('Using Gemini for transcription');
-    const result = await geminiTranscribe(audioBuffer, mimeType);
-
-    if (isHallucination(result.text)) {
-      console.log('Filtered hallucination (Gemini):', result.text);
-      return res.json({ text: '', language: result.language });
-    }
-
-    console.log('Gemini transcription:', result.text, '| Language:', result.language);
-    return res.json({ text: result.text, language: result.language });
-  }
-
-  // Groq Whisper path
-  const result = await groqTranscribe(audio, mimeType);
+  const result = await transcribeAudio(audio, mimeType);
 
   if (isHallucination(result.text)) {
-    console.log('Filtered hallucination:', result.text);
+    log('filtered hallucination: %s', result.text);
     return res.json({ text: '', language: result.language });
   }
 
-  console.log('Transcription result:', result.text, '| Language:', result.language);
+  log('result: %s | lang: %s', result.text, result.language);
   res.json({ text: result.text, language: result.language });
 }
