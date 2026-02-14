@@ -1,10 +1,10 @@
 node_modules
 .env
+.git
+.gitignore
 *.log
 npm-debug.log*
 .DS_Store
 .vscode
 .idea
 docker
-Dockerfile
-/src/generated/prisma
