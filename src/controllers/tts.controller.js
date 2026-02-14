@@ -1,4 +1,4 @@
-import { textToSpeech, listVoices } from '../services/elevenlabs.service.js';
+import { textToSpeech, listVoices } from '../services/openai.service.js';
 import { AppError } from '../middleware/errorHandler.js';
 
 export async function synthesize(req, res) {
@@ -7,7 +7,7 @@ export async function synthesize(req, res) {
 
   const result = await textToSpeech(text, { voiceId });
   if (!result) {
-    throw new AppError('TTS not available — set ELEVENLABS_API_KEY', 500);
+    throw new AppError('TTS not available — set OPENAI_API_KEY', 500);
   }
 
   res.json({ audio: result.audio, contentType: result.contentType });

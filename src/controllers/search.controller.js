@@ -9,7 +9,8 @@ export async function search(req, res) {
     lon = config.defaults.lon,
     sort = 'price',
     page = 1,
-    platforms = ['snoonu', 'rafeeq', 'talabat'],
+    platforms,
+    country = 'QA',
     price_min,
     price_max,
     time_min,
@@ -20,7 +21,7 @@ export async function search(req, res) {
   if (!term) throw new AppError('Search term is required', 400);
 
   const result = await searchProducts({
-    term, lat, lon, sort, page, platforms,
+    term, lat, lon, sort, page, platforms, country,
     price_min, price_max, time_min, time_max,
     restaurant_filter,
   });

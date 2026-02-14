@@ -1,0 +1,897 @@
+{
+  "info": {
+    "name": "FoodFetch API v2",
+    "description": "Food Finder Backend API — GROQ (LLM/Whisper) + OpenAI (TTS Mel voice)\n\nSet the `base_url` and `token` variables before using.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5006" },
+    { "key": "token", "value": "" },
+    { "key": "admin_token", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "location_id", "value": "" },
+    { "key": "marketer_id", "value": "" },
+    { "key": "session_id", "value": "default" },
+    { "key": "reset_token", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/health",
+            "auth": { "type": "noauth" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('token', json.token);",
+                  "  pm.collectionVariables.set('user_id', json.user._id || json.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/register",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Test1234!\",\n  \"name\": \"Test User\",\n  \"voucherCode\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('token', json.token);",
+                  "  pm.collectionVariables.set('user_id', json.user._id || json.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Test1234!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('admin_token', json.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/login",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@foodfetch.com\",\n  \"password\": \"AdminPass123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/logout"
+          }
+        },
+        {
+          "name": "Logout All Sessions",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/logout-all"
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/forgot-password",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/auth/reset-password",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_token}}\",\n  \"newPassword\": \"NewPass1234!\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users/me"
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/users/me",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Name\",\n  \"language\": \"en\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/users/me/password",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"Test1234!\",\n  \"newPassword\": \"NewPass5678!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Saved Locations",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/users/me/locations"
+          }
+        },
+        {
+          "name": "Add Location",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('location_id', json._id || json.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/users/me/locations",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Home\",\n  \"lat\": 25.2855,\n  \"lon\": 51.5314,\n  \"country\": \"QA\",\n  \"address\": \"Doha, Qatar\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Location",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/users/me/locations/{{location_id}}",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Office\",\n  \"address\": \"West Bay, Doha\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Set Default Location",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/users/me/locations/{{location_id}}/default"
+          }
+        },
+        {
+          "name": "Delete Location",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/users/me/locations/{{location_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "Search Products",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/search",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"term\": \"pizza\",\n  \"lat\": 25.2855,\n  \"lon\": 51.5314,\n  \"sort\": \"price\",\n  \"page\": 1,\n  \"country\": \"QA\",\n  \"platforms\": \"\",\n  \"price_min\": \"\",\n  \"price_max\": \"\",\n  \"time_min\": \"\",\n  \"time_max\": \"\",\n  \"restaurant_filter\": \"\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Voice",
+      "item": [
+        {
+          "name": "Process Voice Input",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/process-voice",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"I want pizza\",\n  \"language\": \"en\",\n  \"lat\": 25.2855,\n  \"lon\": 51.5314,\n  \"validate\": false,\n  \"useAI\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transcribe",
+      "item": [
+        {
+          "name": "Transcribe Audio",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/transcribe",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audio\": \"<base64_audio_data>\",\n  \"mimeType\": \"audio/webm\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "TTS",
+      "item": [
+        {
+          "name": "Text to Speech",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/tts",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Hello, I found some great pizza near you!\",\n  \"voiceId\": \"mel\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List Voices",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/tts/voices",
+            "auth": { "type": "noauth" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Translate",
+      "item": [
+        {
+          "name": "Translate Text",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/translate",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"What would you like to order today?\",\n  \"language\": \"ar\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Translate Phrase",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/translate",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"greeting\",\n  \"language\": \"fr\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Phrases",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/translate/phrases/ar",
+            "auth": { "type": "noauth" }
+          }
+        },
+        {
+          "name": "List Languages",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/translate/languages",
+            "auth": { "type": "noauth" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Chat",
+      "item": [
+        {
+          "name": "Start Chat",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('session_id', json.sessionId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/chat/start",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"\",\n  \"generateAudio\": true,\n  \"language\": \"en\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Text Chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/chat",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"I want pizza\",\n  \"sessionId\": \"{{session_id}}\",\n  \"generateAudio\": true,\n  \"language\": \"en\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Audio Chat",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/chat/audio",
+            "auth": { "type": "noauth" },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"audio\": \"<base64_audio_data>\",\n  \"mimeType\": \"audio/webm\",\n  \"sessionId\": \"{{session_id}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Chat History",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/chat/history/{{session_id}}",
+            "auth": { "type": "noauth" }
+          }
+        },
+        {
+          "name": "Clear Chat",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/chat/{{session_id}}",
+            "auth": { "type": "noauth" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{admin_token}}", "type": "string" }]
+      },
+      "item": [
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "List Users",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/users?page=1&limit=20&role=&search=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "users"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "role", "value": "", "description": "Filter: USER or ADMIN" },
+                    { "key": "search", "value": "", "description": "Search by name/email" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get User",
+              "request": {
+                "method": "GET",
+                "url": "{{base_url}}/admin/users/{{user_id}}"
+              }
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PATCH",
+                "url": "{{base_url}}/admin/users/{{user_id}}",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Updated Name\",\n  \"role\": \"ADMIN\"\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete User",
+              "request": {
+                "method": "DELETE",
+                "url": "{{base_url}}/admin/users/{{user_id}}"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Analytics",
+          "item": [
+            {
+              "name": "Overview",
+              "request": {
+                "method": "GET",
+                "url": "{{base_url}}/admin/analytics/overview"
+              }
+            },
+            {
+              "name": "Search Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/searches?from=&to=&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "searches"],
+                  "query": [
+                    { "key": "from", "value": "", "description": "ISO date" },
+                    { "key": "to", "value": "", "description": "ISO date" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Platform Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/platforms?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "platforms"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Popular Items",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/popular-items?from=&to=&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "popular-items"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "User Activity",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/activity?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "activity"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Geo Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/geo?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "geo"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Time Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/time?from=&to=&granularity=daily",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "time"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" },
+                    { "key": "granularity", "value": "daily", "description": "daily | weekly | monthly" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token Analytics",
+          "item": [
+            {
+              "name": "Token Overview",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/tokens?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "tokens"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Token Timeline",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/tokens/timeline?from=&to=&granularity=daily",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "tokens", "timeline"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" },
+                    { "key": "granularity", "value": "daily", "description": "daily | weekly | monthly" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Token Costs",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/tokens/costs?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "tokens", "costs"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Billing Report (Monthly)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/tokens/billing?months=1",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "tokens", "billing"],
+                  "query": [
+                    { "key": "months", "value": "1", "description": "Number of months to look back (default: 1)" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "User Token Usage",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/users/{{user_id}}/tokens?page=1&limit=50&from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "users", "{{user_id}}", "tokens"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "50" },
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "User Token Summary",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/users/{{user_id}}/tokens/summary?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "users", "{{user_id}}", "tokens", "summary"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "User Token Timeline",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/users/{{user_id}}/tokens/timeline?from=&to=&granularity=daily",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "users", "{{user_id}}", "tokens", "timeline"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" },
+                    { "key": "granularity", "value": "daily", "description": "daily | weekly | monthly" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marketers",
+          "item": [
+            {
+              "name": "Create Marketer",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {",
+                      "  const json = pm.response.json();",
+                      "  pm.collectionVariables.set('marketer_id', json._id || json.id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "url": "{{base_url}}/admin/marketers",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Test Marketer\",\n  \"code\": \"PROMO2026\",\n  \"commission\": 10,\n  \"maxRedemptions\": 100,\n  \"expiresAt\": \"2026-12-31\"\n}"
+                }
+              }
+            },
+            {
+              "name": "List Marketers",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/marketers?page=1&limit=20&search=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "marketers"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "search", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Marketer",
+              "request": {
+                "method": "GET",
+                "url": "{{base_url}}/admin/marketers/{{marketer_id}}"
+              }
+            },
+            {
+              "name": "Update Marketer",
+              "request": {
+                "method": "PATCH",
+                "url": "{{base_url}}/admin/marketers/{{marketer_id}}",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Updated Marketer\",\n  \"commission\": 15,\n  \"isActive\": true\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Marketer",
+              "request": {
+                "method": "DELETE",
+                "url": "{{base_url}}/admin/marketers/{{marketer_id}}"
+              }
+            },
+            {
+              "name": "Marketer Redemptions",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/marketers/{{marketer_id}}/redemptions?page=1&limit=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "marketers", "{{marketer_id}}", "redemptions"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "All Marketer Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/marketers?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "marketers"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Single Marketer Analytics",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/analytics/marketers/{{marketer_id}}?from=&to=&granularity=daily",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "analytics", "marketers", "{{marketer_id}}"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" },
+                    { "key": "granularity", "value": "daily" }
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exports",
+          "item": [
+            {
+              "name": "Export Searches (CSV)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/export/searches?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "export", "searches"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Export Users (CSV)",
+              "request": {
+                "method": "GET",
+                "url": "{{base_url}}/admin/export/users"
+              }
+            },
+            {
+              "name": "Export Token Usage (CSV)",
+              "request": {
+                "method": "GET",
+                "url": {
+                  "raw": "{{base_url}}/admin/export/tokens?from=&to=",
+                  "host": ["{{base_url}}"],
+                  "path": ["admin", "export", "tokens"],
+                  "query": [
+                    { "key": "from", "value": "" },
+                    { "key": "to", "value": "" }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Export Marketers (CSV)",
+              "request": {
+                "method": "GET",
+                "url": "{{base_url}}/admin/export/marketers"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

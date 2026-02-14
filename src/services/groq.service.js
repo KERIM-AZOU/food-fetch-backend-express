@@ -2,9 +2,12 @@ import axios from 'axios';
 import FormData from 'form-data';
 import debug from 'debug';
 import config from '../config/index.js';
+import { trackTokenUsage } from '../utils/tokenTracker.js';
 
 const log = debug('app:groq');
-const { apiKey, baseUrl, chatModel, extractionModel } = config.groq;
+const { apiKey, baseUrl, chatModel, extractionModel, whisperModel } = config.groq;
+
+const authHeaders = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
 
 // ── Whisper transcription ────────────────────────────────────────────
 
@@ -16,7 +19,7 @@ export async function transcribeAudio(audioBase64, mimeType = 'audio/webm') {
 
   const form = new FormData();
   form.append('file', audioBuffer, { filename: `audio.${ext}`, contentType: mimeType });
-  form.append('model', 'whisper-large-v3');
+  form.append('model', whisperModel);
   form.append('response_format', 'verbose_json');
 
   const start = Date.now();
@@ -30,6 +33,12 @@ export async function transcribeAudio(audioBase64, mimeType = 'audio/webm') {
     },
   );
   log('Whisper — %dms', Date.now() - start);
+
+  trackTokenUsage({
+    service: 'transcribe',
+    model: whisperModel,
+    metadata: { audioMimeType: mimeType, textLength: response.data.text?.length || 0, durationMs: Date.now() - start },
+  });
 
   return {
     text: response.data.text || '',
@@ -60,11 +69,20 @@ Examples: "frites"->fries | "أريد بيتزا"->pizza | "poulet avec riz"->ch
       temperature: 0.1,
       max_tokens: 100,
     },
-    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } },
+    { headers: authHeaders },
   );
 
   const extracted = response.data.choices[0]?.message?.content?.trim() || '';
   log('extracted: %s from: %s', extracted, text);
+
+  trackTokenUsage({
+    service: 'search',
+    model: extractionModel,
+    inputTokens: response.data.usage?.prompt_tokens || 0,
+    outputTokens: response.data.usage?.completion_tokens || 0,
+    totalTokens: response.data.usage?.total_tokens || 0,
+  });
+
   return extracted;
 }
 
@@ -86,8 +104,16 @@ export async function translateText(text, targetLanguageName) {
       temperature: 0.1,
       max_tokens: 150,
     },
-    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } },
+    { headers: authHeaders },
   );
+
+  trackTokenUsage({
+    service: 'translate',
+    model: extractionModel,
+    inputTokens: response.data.usage?.prompt_tokens || 0,
+    outputTokens: response.data.usage?.completion_tokens || 0,
+    totalTokens: response.data.usage?.total_tokens || 0,
+  });
 
   return response.data.choices[0]?.message?.content?.trim() || text;
 }
@@ -95,64 +121,57 @@ export async function translateText(text, targetLanguageName) {
 // ── Chat (Llama) ─────────────────────────────────────────────────────
 
 function getChatSystemPrompt(language = 'en') {
-  return `You are a fun, friendly, and curious AI assistant who loves chatting. You're warm, witty, and genuinely interested in people.
+  return `You are Mel, a super friendly and cheerful food assistant. You're like a warm best friend who genuinely cares about people and gets excited about helping them find delicious food. You love food, cooking, and making people smile.
 
 **Rules:**
-- Respond in the language: ${language}
+- Respond in the language: ${language === 'auto' ? "the same language the user is writing in (detect it)" : language}
 - Keep responses under 30 words — be concise but expressive
 - ALWAYS end with a follow-up question to keep the conversation going naturally
 - Remember what the user said earlier and reference it when relevant
-- Be playful and use casual language — like talking to a friend
-- You can help find food! If the user mentions food, being hungry, or wanting to eat, extract the food items
+- Be warm, encouraging, and enthusiastic — use casual, upbeat language like talking to a close friend
+- You LOVE food! If the user mentions food, being hungry, or wanting to eat, get excited and help them find it
 
 **Response format — JSON only, no extra text:**
-{"response":"your reply","foodMentioned":bool,"foodItems":["items in english"],"shouldSearch":bool,"shouldStop":bool}
+{"response":"your reply","foodMentioned":bool,"foodItems":["items in english"],"shouldSearch":bool,"shouldStop":bool,"detectedLanguage":"ISO 639-1 code"}
 
 - foodItems: always in English, even if the user speaks another language
 - shouldSearch: true when user mentions specific food they want
 - shouldStop: true only when user says bye/stop/done/quit/goodbye
+- detectedLanguage: the ISO 639-1 language code of the user's message (e.g. "en", "fr", "ar")
 
 **Examples:**
 User: "Hi"
-{"response":"Hey there! I was just thinking about how cool today is. What's been on your mind?","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":false}
+{"response":"Hiii! So happy you're here! What are you in the mood for today?","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":false}
 
 User: "I'm starving"
-{"response":"Oh no, we can't have that! What kind of food are you craving right now?","foodMentioned":true,"foodItems":[],"shouldSearch":false,"shouldStop":false}
+{"response":"Oh noo, let's fix that right away! What sounds yummy to you right now?","foodMentioned":true,"foodItems":[],"shouldSearch":false,"shouldStop":false}
 
 User: "pizza"
-{"response":"Great choice! Let me find some pizza for you. Any particular style you love?","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
+{"response":"Yesss, pizza! Amazing choice! Let me find the best ones near you — any favorite toppings?","foodMentioned":true,"foodItems":["pizza"],"shouldSearch":true,"shouldStop":false}
 
 User: "bye"
-{"response":"It was awesome chatting with you! Come back anytime!","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":true}`;
+{"response":"Bye bye! It was so fun chatting with you! Come back whenever you're hungry!","foodMentioned":false,"foodItems":[],"shouldSearch":false,"shouldStop":true}`;
 }
 
-function parseGroqChatResponse(text) {
-  try {
-    const parsed = JSON.parse(text);
+function parseChatResponse(text) {
+  function extract(parsed) {
     return {
       response: parsed.response || text,
       foodMentioned: parsed.foodMentioned || false,
       foodItems: parsed.foodItems || [],
       shouldSearch: parsed.shouldSearch || false,
       shouldStop: parsed.shouldStop || false,
+      detectedLanguage: parsed.detectedLanguage || null,
     };
+  }
+  try {
+    return extract(JSON.parse(text));
   } catch {
     const jsonMatch = text.match(/\{[\s\S]*"response"[\s\S]*\}/);
     if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          response: parsed.response || text,
-          foodMentioned: parsed.foodMentioned || false,
-          foodItems: parsed.foodItems || [],
-          shouldSearch: parsed.shouldSearch || false,
-          shouldStop: parsed.shouldStop || false,
-        };
-      } catch {
-        // fall through
-      }
+      try { return extract(JSON.parse(jsonMatch[0])); } catch { /* fall through */ }
     }
-    return { response: text, foodMentioned: false, foodItems: [], shouldSearch: false, shouldStop: false };
+    return { response: text, foodMentioned: false, foodItems: [], shouldSearch: false, shouldStop: false, detectedLanguage: null };
   }
 }
 
@@ -161,7 +180,7 @@ export async function chat(userMessage, conversationHistory = [], language = 'en
 
   const messages = [{ role: 'system', content: getChatSystemPrompt(language) }];
 
-  for (const msg of conversationHistory.slice(-10)) {
+  for (const msg of conversationHistory.slice(-4)) {
     messages.push({ role: msg.role === 'user' ? 'user' : 'assistant', content: msg.content });
   }
   messages.push({ role: 'user', content: userMessage });
@@ -169,13 +188,22 @@ export async function chat(userMessage, conversationHistory = [], language = 'en
   const start = Date.now();
   const result = await axios.post(
     `${baseUrl}/chat/completions`,
-    { model: chatModel, messages, temperature: 0.7, max_tokens: 150 },
-    { headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' } },
+    { model: chatModel, messages, temperature: 0.7, max_tokens: 150, response_format: { type: 'json_object' } },
+    { headers: authHeaders },
   );
   log('chat — %dms', Date.now() - start);
 
+  trackTokenUsage({
+    service: 'chat',
+    model: chatModel,
+    inputTokens: result.data.usage?.prompt_tokens || 0,
+    outputTokens: result.data.usage?.completion_tokens || 0,
+    totalTokens: result.data.usage?.total_tokens || 0,
+  });
+
   const responseText = result.data.choices?.[0]?.message?.content || '';
-  return parseGroqChatResponse(responseText);
+  log('raw LLM response: %s', responseText);
+  return parseChatResponse(responseText);
 }
 
 export function generateGreeting(language = 'en') {

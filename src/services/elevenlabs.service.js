@@ -1,6 +1,7 @@
 import axios from 'axios';
 import debug from 'debug';
 import config from '../config/index.js';
+import { trackTokenUsage } from '../utils/tokenTracker.js';
 
 const log = debug('app:elevenlabs');
 const { apiKey, defaultVoiceId, chatVoiceId } = config.elevenlabs;
@@ -33,6 +34,12 @@ export async function textToSpeech(text, { voiceId, forChat = false } = {}) {
     },
   );
   log('TTS — %dms', Date.now() - start);
+
+  trackTokenUsage({
+    service: 'tts',
+    model: `elevenlabs-${voice}`,
+    metadata: { textLength: text.length, durationMs: Date.now() - start },
+  });
 
   return {
     audio: Buffer.from(response.data).toString('base64'),

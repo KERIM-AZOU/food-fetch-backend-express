@@ -25,13 +25,13 @@
 
 ---
 
-### 1. Database Setup (PostgreSQL + Prisma)
+### 1. Database Setup (PostgreSQL + Prisma) ✅
 
-- [ ] Install `prisma` and `@prisma/client`
-- [ ] Run `npx prisma init` — creates `prisma/schema.prisma` and updates `.env` with `DATABASE_URL`
-- [ ] Define the Prisma schema (all models below)
-- [ ] Run `npx prisma migrate dev` to create tables
-- [ ] Create `src/config/db.js` — Prisma client singleton
+- [x] Install `prisma`, `@prisma/client`, `@prisma/adapter-pg`, `pg`
+- [x] Run `npx prisma init` — creates `prisma/schema.prisma` and updates `.env` with `DATABASE_URL`
+- [x] Define the Prisma schema (all models below)
+- [x] Run migration to create tables
+- [x] Create `src/config/db.js` — Prisma client singleton (with v7 driver adapter)
 
 #### Prisma Models
 
@@ -43,6 +43,7 @@ User
 ├── name          String?
 ├── role          Role      @default(USER)    // USER | ADMIN
 ├── preferences   Json?     (language, default country, theme, etc.)
+├── voucherCode   String?   (the marketer code used at registration, nullable)
 ├── isVerified    Boolean   @default(false)
 ├── createdAt     DateTime  @default(now())
 ├── updatedAt     DateTime  @updatedAt
@@ -88,6 +89,40 @@ PasswordReset
 ├── expiresAt     DateTime
 ├── used          Boolean   @default(false)
 ├── createdAt     DateTime  @default(now())
+
+TokenUsage
+├── id            String    @id @default(uuid())
+├── userId        String    → User
+├── service       String    ("search" | "chat" | "tts" | "transcribe" | "translate" | "voice")
+├── model         String?   (e.g. "groq-whisper", "groq-llama", "google-tts")
+├── inputTokens   Int       @default(0)
+├── outputTokens  Int       @default(0)
+├── totalTokens   Int       @default(0)
+├── cost          Float?    (estimated cost in USD, if applicable)
+├── metadata      Json?     (extra context: query length, audio duration, etc.)
+├── createdAt     DateTime  @default(now())
+
+Marketer (standalone — not a user account)
+├── id            String    @id @default(uuid())
+├── name          String    (marketer's name)
+├── code          String    @unique (e.g. "AHMED20", "SUMMER2026")
+├── isActive      Boolean   @default(true)
+├── maxUses       Int?      (null = unlimited)
+├── usedCount     Int       @default(0)
+├── expiresAt     DateTime? (null = never expires)
+├── createdAt     DateTime  @default(now())
+├── updatedAt     DateTime  @updatedAt
+├── redemptions   VoucherRedemption[]
+
+VoucherRedemption
+├── id            String    @id @default(uuid())
+├── marketerId    String    → Marketer
+├── userId        String    @unique → User (the user who signed up with this code)
+├── createdAt     DateTime  @default(now())
+
++ Add relations to User model:
+  ├── tokenUsages        TokenUsage[]
+  └── voucherRedemption  VoucherRedemption? (if this user signed up with a code)
 ```
 
 ---
@@ -125,7 +160,7 @@ All mounted under `/api/auth`
 
 | Method | Endpoint | Controller | Middleware | Description |
 |---|---|---|---|---|
-| POST | `/register` | `register` | rateLimiter, validate | Create new user account (email, password, name) |
+| POST | `/register` | `register` | rateLimiter, validate | Create new user account (email, password, name, optional voucherCode) |
 | POST | `/login` | `login` | rateLimiter, validate | Email/password login → returns access + refresh tokens |
 | POST | `/refresh` | `refresh` | validate | Exchange refresh token for new access token |
 | POST | `/logout` | `logout` | auth | Invalidate the refresh token (delete session row) |
@@ -184,8 +219,24 @@ All mounted under `/api/admin` — require `auth` + `requireRole('ADMIN')`
 | GET | `/analytics/geo` | `geoAnalytics` | auth, admin | Location-based data (lat/lon clusters, country split) |
 | GET | `/analytics/time` | `timeAnalytics` | auth, admin | Peak hours, daily/weekly trends |
 | GET | `/analytics/overview` | `overview` | auth, admin | Dashboard summary (total users, searches today, top platform) |
+| GET | `/analytics/tokens` | `tokenOverview` | auth, admin | Total token consumption across all users, broken down by service |
+| GET | `/analytics/tokens/timeline` | `tokenTimeline` | auth, admin | Token usage over time (daily/weekly/monthly aggregation) |
+| GET | `/analytics/tokens/costs` | `tokenCosts` | auth, admin | Estimated cost breakdown by service and model |
+| GET | `/users/:id/tokens` | `userTokenUsage` | auth, admin | Single user's full token usage history (paginated, with timestamps) |
+| GET | `/users/:id/tokens/summary` | `userTokenSummary` | auth, admin | Single user's aggregated token usage (totals by service, date range filter) |
+| GET | `/users/:id/tokens/timeline` | `userTokenTimeline` | auth, admin | Single user's token consumption over time (chart-ready data) |
+| POST | `/marketers` | `createMarketer` | auth, admin | Add a new marketer (name + unique code) |
+| GET | `/marketers` | `listMarketers` | auth, admin | Paginated list of all marketers with redemption counts |
+| GET | `/marketers/:id` | `getMarketer` | auth, admin | Single marketer detail + redemption list |
+| PATCH | `/marketers/:id` | `updateMarketer` | auth, admin | Edit marketer (name, code, active status, max uses, expiry) |
+| DELETE | `/marketers/:id` | `deleteMarketer` | auth, admin | Deactivate a marketer |
+| GET | `/marketers/:id/redemptions` | `marketerRedemptions` | auth, admin | List all users who signed up with this marketer's code (paginated, timestamps) |
+| GET | `/analytics/marketers` | `marketerAnalytics` | auth, admin | Overall marketing performance (total signups, top marketers, trends) |
+| GET | `/analytics/marketers/:id` | `singleMarketerAnalytics` | auth, admin | Single marketer performance over time (signups per day/week/month) |
 | GET | `/export/searches` | `exportSearches` | auth, admin | CSV export of search logs |
 | GET | `/export/users` | `exportUsers` | auth, admin | CSV export of user list |
+| GET | `/export/tokens` | `exportTokenUsage` | auth, admin | CSV export of token usage logs |
+| GET | `/export/marketers` | `exportMarketers` | auth, admin | CSV export of marketers + voucher performance |
 
 #### Files to create:
 - [ ] `src/routes/admin.routes.js`
@@ -200,7 +251,94 @@ All mounted under `/api/admin` — require `auth` + `requireRole('ADMIN')`
 
 ---
 
-### 6. Search Enhancement (analytics logging)
+### 6. Token Usage Tracking (Admin Visibility)
+
+Every API call that consumes external AI tokens should be tracked so the admin can monitor usage per user over time.
+
+#### How it works:
+- A `trackTokenUsage` utility is called inside each service (search, chat, TTS, transcribe, translate, voice) after a successful API call
+- It writes a `TokenUsage` row with: userId, service name, model used, input/output/total tokens, estimated cost, and timestamp
+- For anonymous users, `userId` is null (same pattern as `SearchLog`)
+
+#### Middleware / Utility:
+- [ ] **`src/utils/tokenTracker.js`** — helper function to log token usage to DB
+  - `trackTokenUsage({ userId, service, model, inputTokens, outputTokens, totalTokens, cost, metadata })`
+  - Non-blocking — fire-and-forget, doesn't slow down the response
+  - Gracefully handles DB errors (logs warning, doesn't crash)
+
+#### Service updates (add token tracking calls):
+- [ ] `src/services/search.service.js` — track tokens after GROQ keyword extraction
+- [ ] `src/services/chat.service.js` — track tokens after each chat completion
+- [ ] `src/services/tts.service.js` — track usage after TTS synthesis (character count as proxy)
+- [ ] `src/services/transcription.service.js` — track tokens after audio transcription
+- [ ] `src/services/translation.service.js` — track tokens after translation calls
+- [ ] `src/services/voice.service.js` — track tokens after voice processing pipeline
+
+#### Admin service:
+- [ ] **`src/services/tokenUsage.service.js`** — query logic for all token analytics
+  - `getTokenOverview()` — totals by service across all users
+  - `getTokenTimeline(granularity, dateRange)` — time-series aggregation (daily/weekly/monthly)
+  - `getTokenCosts(dateRange)` — cost breakdown by service and model
+  - `getUserTokenUsage(userId, pagination)` — paginated history for a single user
+  - `getUserTokenSummary(userId, dateRange)` — aggregated totals per service for a user
+  - `getUserTokenTimeline(userId, granularity, dateRange)` — per-user time-series data
+  - All queries support date range filters (`from`, `to` query params)
+
+#### Admin endpoints (see Section 5 route table):
+- `GET /api/admin/analytics/tokens` — global token overview
+- `GET /api/admin/analytics/tokens/timeline?granularity=daily&from=...&to=...`
+- `GET /api/admin/analytics/tokens/costs?from=...&to=...`
+- `GET /api/admin/users/:id/tokens?page=1&limit=50`
+- `GET /api/admin/users/:id/tokens/summary?from=...&to=...`
+- `GET /api/admin/users/:id/tokens/timeline?granularity=weekly`
+- `GET /api/admin/export/tokens?from=...&to=...` — CSV export
+
+---
+
+### 7. Marketing Team & Voucher Codes
+
+Each marketer is a simple record with a name and a unique code (not a user account). Users can enter a code during registration. The admin manages marketers and sees performance stats.
+
+#### Registration flow update:
+- [ ] Update `POST /api/auth/register` to accept an optional `voucherCode` field
+  - If provided, validate the code exists, is active, not expired, and hasn't hit max uses
+  - If valid: create the user, increment `Marketer.usedCount`, write a `VoucherRedemption` row, store `voucherCode` on the User
+  - If invalid/expired: return `400` with a clear error message
+  - If not provided: proceed with normal registration (no code attached)
+
+#### Files to create:
+- [ ] **`src/services/marketer.service.js`** — marketer CRUD
+  - `createMarketer(data)` — create a marketer (name + code)
+  - `listMarketers(pagination, filters)` — with redemption count per marketer
+  - `getMarketer(id)` — detail with redemptions list
+  - `updateMarketer(id, data)` — edit name, code, active status, max uses, expiry
+  - `deactivateMarketer(id)` — set isActive = false
+  - `getRedemptions(marketerId, pagination)` — paginated list of users who used the code
+
+- [ ] **`src/services/marketerAnalytics.service.js`** — marketing analytics queries
+  - `getMarketerOverview()` — total signups via codes, top performing marketers, trends
+  - `getSingleMarketerAnalytics(marketerId, granularity, dateRange)` — signups over time
+  - All queries support date range filters (`from`, `to`)
+
+- [ ] **`src/utils/voucherValidator.js`** — reusable validation logic
+  - `validateVoucher(code)` — checks marketer exists, is active, not expired, hasn't hit max uses
+  - Returns `{ valid, marketer, error }` object
+  - Used by auth service during registration
+
+#### Admin endpoints (see Section 5 route table):
+- `POST /api/admin/marketers` — create marketer (name + code)
+- `GET /api/admin/marketers` — list all marketers
+- `GET /api/admin/marketers/:id` — single marketer detail
+- `PATCH /api/admin/marketers/:id` — update marketer
+- `DELETE /api/admin/marketers/:id` — deactivate marketer
+- `GET /api/admin/marketers/:id/redemptions` — who signed up with this code
+- `GET /api/admin/analytics/marketers` — overall marketing performance
+- `GET /api/admin/analytics/marketers/:id` — single marketer performance
+- `GET /api/admin/export/marketers` — CSV export
+
+---
+
+### 8. Search Enhancement (analytics logging)
 
 The existing search endpoint needs a small addition:
 
@@ -210,7 +348,7 @@ The existing search endpoint needs a small addition:
 
 ---
 
-### 7. Saudi Arabia Market Support
+### 9. Saudi Arabia Market Support
 
 The contract specifies Talabat for Saudi Arabia:
 
@@ -224,7 +362,7 @@ The contract specifies Talabat for Saudi Arabia:
 
 ---
 
-### 8. Update Route Aggregator
+### 10. Update Route Aggregator
 
 - [ ] Mount new routes in `src/routes/index.js`:
   ```js
@@ -235,7 +373,7 @@ The contract specifies Talabat for Saudi Arabia:
 
 ---
 
-### 9. Config Updates
+### 11. Config Updates
 
 - [ ] Add to `src/config/index.js`:
   ```
@@ -273,11 +411,13 @@ The contract specifies Talabat for Saudi Arabia:
 | Auth | `auth.routes.js`, `auth.controller.js`, `auth.service.js`, `email.service.js` |
 | Users | `user.routes.js`, `user.controller.js`, `user.service.js` |
 | Admin | `admin.routes.js`, `admin.controller.js`, `admin.service.js`, `analytics.service.js`, `export.service.js` |
+| Token Tracking | `src/utils/tokenTracker.js`, `src/services/tokenUsage.service.js` |
+| Marketing | `marketer.service.js`, `marketerAnalytics.service.js`, `src/utils/voucherValidator.js` |
 | Platforms | `talabat-sa.js` |
-| Updates | `routes/index.js`, `config/index.js`, `.env.example`, `search.controller.js`, `search.service.js` |
+| Updates | `routes/index.js`, `config/index.js`, `.env.example`, `search.controller.js`, `search.service.js`, `chat.service.js`, `tts.service.js`, `transcription.service.js`, `translation.service.js`, `voice.service.js`, `auth.service.js` |
 
-**Total new files: ~18**
-**Updated files: ~5**
+**Total new files: ~23**
+**Updated files: ~12**
 
 ---
 

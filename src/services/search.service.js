@@ -1,6 +1,7 @@
 import { searchSnoonu } from '../platforms/snoonu.js';
 import { searchRafeeq } from '../platforms/rafeeq.js';
 import { searchTalabat } from '../platforms/talabat.js';
+import { searchTalabatSA } from '../platforms/talabat-sa.js';
 import {
   groupProductsBySimilarity,
   applyFilters,
@@ -13,6 +14,12 @@ const PLATFORM_MAP = {
   snoonu: searchSnoonu,
   rafeeq: searchRafeeq,
   talabat: searchTalabat,
+  'talabat-sa': searchTalabatSA,
+};
+
+const COUNTRY_PLATFORMS = {
+  QA: ['snoonu', 'rafeeq', 'talabat'],
+  SA: ['talabat-sa'],
 };
 
 /**
@@ -24,14 +31,18 @@ export async function searchProducts({
   lon,
   sort = 'price',
   page = 1,
-  platforms = ['snoonu', 'rafeeq', 'talabat'],
+  platforms,
+  country = 'QA',
   price_min,
   price_max,
   time_min,
   time_max,
   restaurant_filter = '',
 }) {
-  const promises = platforms
+  // Use country-specific defaults if no platforms specified
+  const activePlatforms = platforms || COUNTRY_PLATFORMS[country] || COUNTRY_PLATFORMS.QA;
+
+  const promises = activePlatforms
     .filter((p) => PLATFORM_MAP[p])
     .map((p) => PLATFORM_MAP[p](term, lat, lon));
 

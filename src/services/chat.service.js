@@ -1,6 +1,6 @@
 import debug from 'debug';
 import * as groqService from './groq.service.js';
-import * as elevenlabsService from './elevenlabs.service.js';
+import * as openaiService from './openai.service.js';
 import config from '../config/index.js';
 
 const log = debug('app:chat');
@@ -51,31 +51,42 @@ function trimHistory(conversation) {
 
 async function chatTTS(text) {
   try {
-    const result = await elevenlabsService.textToSpeech(text, { forChat: true });
+    const result = await openaiService.textToSpeech(text, { forChat: true });
     return { data: result.audio, contentType: result.contentType };
   } catch (err) {
-    log('ElevenLabs TTS error: %s', err.message);
+    log('OpenAI TTS error: %s', err.message);
   }
   return null;
 }
 
 // ── Public API ───────────────────────────────────────────────────────
 
-export async function handleTextChat({ message, sessionId = 'default', generateAudio = true, language = 'en' }) {
+export async function handleTextChat({ message, sessionId = 'default', generateAudio = true }) {
   const conversation = getOrCreateConversation(sessionId);
+  const language = conversation.language || 'auto';
 
   let stepStart = Date.now();
   const result = await groqService.chat(message, conversation.history, language);
   log('text chat — %dms', Date.now() - stepStart);
 
+  if (!conversation.language && result.detectedLanguage) {
+    conversation.language = result.detectedLanguage;
+    log('auto-detected language: %s', result.detectedLanguage);
+  }
+
   conversation.history.push({ role: 'user', content: message });
   conversation.history.push({ role: 'assistant', content: result.response });
   conversation.lastActivity = Date.now();
 
-  if (result.foodMentioned && result.foodItems?.length > 0) {
+  if (result.foodItems?.length > 0) {
     conversation.lastFoodItems = result.foodItems;
   }
-  const foodItems = result.foodItems?.length > 0 ? result.foodItems : conversation.lastFoodItems;
+  // Only use saved food items if this response actually wants to search
+  const foodItems = result.foodItems?.length > 0
+    ? result.foodItems
+    : (result.shouldSearch ? conversation.lastFoodItems : []);
+  // Clear saved items once a search is triggered to prevent duplicate searches
+  if (result.shouldSearch) conversation.lastFoodItems = [];
   trimHistory(conversation);
 
   let audio = null;
@@ -102,6 +113,7 @@ export async function handleStartChat({ sessionId, generateAudio = true, languag
   log('greeting — %dms', Date.now() - routeStart);
 
   const conversation = getOrCreateConversation(sessionId);
+  conversation.language = language;
   conversation.history = [{ role: 'assistant', content: result.greeting }];
   conversation.lastActivity = Date.now();
 
@@ -149,10 +161,13 @@ export async function handleAudioChat({ audio: audioBase64, mimeType = 'audio/we
   conversation.history.push({ role: 'assistant', content: result.response });
   conversation.lastActivity = Date.now();
 
-  if (result.foodMentioned && result.foodItems?.length > 0) {
+  if (result.foodItems?.length > 0) {
     conversation.lastFoodItems = result.foodItems;
   }
-  const foodItems = result.foodItems?.length > 0 ? result.foodItems : conversation.lastFoodItems;
+  const foodItems = result.foodItems?.length > 0
+    ? result.foodItems
+    : (result.shouldSearch ? conversation.lastFoodItems : []);
+  if (result.shouldSearch) conversation.lastFoodItems = [];
   trimHistory(conversation);
 
   stepStart = Date.now();
@@ -177,10 +192,16 @@ export async function handleAudioChat({ audio: audioBase64, mimeType = 'audio/we
   };
 }
 
-export function getHistory(sessionId) {
+export function getHistory(sessionId, { page = 1, limit = 20 } = {}) {
   const conversation = conversations.get(sessionId);
   if (!conversation) return null;
-  return { sessionId, history: conversation.history, lastActivity: conversation.lastActivity };
+
+  const total = conversation.history.length;
+  const totalPages = Math.ceil(total / limit) || 1;
+  const start = (page - 1) * limit;
+  const history = conversation.history.slice(start, start + limit);
+
+  return { sessionId, history, lastActivity: conversation.lastActivity, page, limit, total, totalPages };
 }
 
 export function clearConversation(sessionId) {
