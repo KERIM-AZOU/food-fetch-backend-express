@@ -1,9 +1,9 @@
 import 'dotenv/config';
 
 const config = {
-  port: parseInt(process.env.FETCH_PORT, 10) || 5006,
+  port: parseInt(process.env.FETCH_PORT_EXPRESS, 10) || 5006,
 
-  mongoUri: process.env.MONGO_URI || 'mongodb://root:secret@localhost:27017/foodfetch?authSource=admin',
+  mongoUri: process.env.MONGO_URI_EXPRESS || 'mongodb://root:secret@localhost:27017/foodfetch?authSource=admin',
 
   groq: {
     apiKey: process.env.GROQ_API_KEY,
